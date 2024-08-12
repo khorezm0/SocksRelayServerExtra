@@ -12,7 +12,7 @@ A simple SOCKS v4a proxy server written in .NET Standard 2.0 which forwards all 
 ## How to install
 You can easily install this package to your project using NuGet.
 
-See the [NuGet page](https://www.nuget.org/packages/OutisNemo.SocksRelayServer/)
+See the [NuGet page](https://www.nuget.org/packages/OutisNemo.SocksRelayServerExtra/)
 
 ## How to use
 You can find detailed usage examples in the `tests/SocksRelayServerTests.csproj` project.
