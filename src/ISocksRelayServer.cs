@@ -6,9 +6,20 @@ namespace SocksRelayServer
 {
     public interface ISocksRelayServer : IDisposable
     {
+        /// <summary>
+        /// Invoked when a connection for the local proxy is established.
+        /// </summary>
         event EventHandler<DnsEndPoint> OnLocalConnect;
 
+        /// <summary>
+        /// Invoked when a connection for the remote proxy is established.
+        /// </summary>
         event EventHandler<DnsEndPoint> OnRemoteConnect;
+
+        /// <summary>
+        /// Invoked when an error occurs. Socket will be closed.
+        /// </summary>
+        event EventHandler<System.Exception> OnError;
 
         event EventHandler<string> OnLogMessage;
 
@@ -58,6 +69,11 @@ namespace SocksRelayServer
         /// indicates an infinite time-out period.
         /// </summary>
         int ReceiveTimeout { get; set; }
+
+        /// <summary>
+        /// If you already created new thread, the Accept method will be called on the current thread.
+        /// </summary>
+        bool IsAcceptOnCurrentThread { get; set; }
 
         void Start();
 

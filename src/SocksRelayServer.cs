@@ -36,6 +36,8 @@ namespace SocksRelayServer
         public event EventHandler<DnsEndPoint> OnLocalConnect;
 
         public event EventHandler<DnsEndPoint> OnRemoteConnect;
+        
+        public event EventHandler<System.Exception> OnError;
 
         public event EventHandler<string> OnLogMessage;
 
@@ -57,6 +59,8 @@ namespace SocksRelayServer
 
         public int ReceiveTimeout { get; set; }
 
+        public bool IsAcceptOnCurrentThread { get; set; }
+
         public void Start()
         {
             if (!ResolveHostnamesRemotely && DnsResolver == null)
@@ -67,13 +71,25 @@ namespace SocksRelayServer
             SetupServerSocket();
 
             _serverStarted = true;
-            _acceptThread = new Thread(AcceptConnections) { IsBackground = true };
-            _acceptThread.Start();
+            if (IsAcceptOnCurrentThread)
+            {
+                AcceptConnections();
+            }
+            else
+            {
+                _acceptThread = new Thread(AcceptConnections) { IsBackground = true };
+                _acceptThread.Start();
+            }
         }
 
         public void Stop()
         {
             _serverStarted = false;
+
+            if (_serverSocket.Connected)
+            {
+                _serverSocket.Dispose();
+            }
         }
 
         public void Dispose()
@@ -109,31 +125,44 @@ namespace SocksRelayServer
 
         private void AcceptConnections()
         {
-            while (_serverStarted)
+            try
             {
-                // Accept a connection
-                var connection = new ConnectionInfo();
-
-                var socket = _serverSocket.Accept();
-                socket.ReceiveTimeout = ReceiveTimeout;
-                socket.SendTimeout = SendTimeout;
-
-                connection.LocalSocket = socket;
-                connection.RemoteSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp)
+                while (_serverStarted)
                 {
-                    SendTimeout = SendTimeout,
-                    ReceiveTimeout = ReceiveTimeout,
-                };
+                    // Accept a connection
+                    var connection = new ConnectionInfo();
 
-                // Create the thread for the receive
-                var thread = new Thread(ProcessLocalConnection) { IsBackground = true };
-                thread.Start(connection);
+                    var socket = _serverSocket.Accept();
+                    socket.ReceiveTimeout = ReceiveTimeout;
+                    socket.SendTimeout = SendTimeout;
 
-                var remoteIpEndPoint = (IPEndPoint)connection.LocalSocket.RemoteEndPoint;
-                OnLocalConnect?.Invoke(this, new DnsEndPoint(remoteIpEndPoint.Address.ToString(), remoteIpEndPoint.Port, remoteIpEndPoint.AddressFamily));
+                    connection.LocalSocket = socket;
+                    connection.RemoteSocket =
+                        new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp)
+                        {
+                            SendTimeout = SendTimeout,
+                            ReceiveTimeout = ReceiveTimeout,
+                        };
+
+                    // Create the thread for the receive
+                    var thread = new Thread(ProcessLocalConnection) { IsBackground = true };
+                    thread.Start(connection);
+
+                    var remoteIpEndPoint = (IPEndPoint)connection.LocalSocket.RemoteEndPoint;
+                    OnLocalConnect?.Invoke(this,
+                        new DnsEndPoint(remoteIpEndPoint.Address.ToString(), remoteIpEndPoint.Port,
+                            remoteIpEndPoint.AddressFamily));
+                }
+
+                _serverSocket.Close();
             }
-
-            _serverSocket.Close();
+            catch (System.Exception ex)
+            {
+                // I get ObjectDisposedException from time to time
+                OnError?.Invoke(this, ex);
+                Stop();
+                _serverSocket.Dispose();
+            }
         }
 
         private async void ProcessLocalConnection(object state)
